@@ -6,12 +6,11 @@ use "itertools"
 
 class val Summary
   let moves: Array[U64] val
-  let turns: U64
+  let turns: U64 val
 
   new val create(turns': U64, moves': Array[U64] val) =>
     turns = turns'
-    /* moves = consume moves' */
-    moves = consume moves'
+    moves = moves'
 
 actor Game
   let _dice: Dice
@@ -24,15 +23,15 @@ actor Game
     _dice = Dice(Rand(Time.nanos(), Time.nanos()))
 
   be play(p: Promise[Summary]) =>
-    let moves: Array[U64] = []
+    let moves: Array[U64] trn = []
 
     while finished() == false do
       let spaces = _roll()
       moves.push(spaces)
-      move(_roll())
+      move(spaces)
     end
 
-    p(recover Summary(_turns, moves) end)
+    p(Summary(_turns, consume moves))
 
   fun ref _roll(): U64 => _dice(1, 6)
 
@@ -88,15 +87,28 @@ actor Main
       .join(games.map[Promise[Summary]](consume play_game))
       .next[None](recover this~summarize() end)
 
-  be summarize(turns: Array[Summary] val) =>
-    _env.out.print("We're done")
-    /* _env.out.print("Max Turns: " + max(turns).string()) */
-    /* _env.out.print("Min Turns: " + min(turns).string()) */
+  be summarize(summaries: Array[Summary] val) =>
+    let min_value = min(summaries)
+    _env.out.print("Max Turns: " + max(summaries).string())
+    _env.out.print("Min Turns: " + min_value.string())
 
-  fun max(turns: Array[U64] val): U64 =>
-    Iter[U64](turns.values())
+    try
+      let smallest = Iter[Summary](summaries.values())
+        .find({(sum) => sum.turns == min_value})?
+
+      _env.out.print("Move History: ")
+      for move in smallest.moves.values() do
+        _env.out.print("* " + move.string())
+      end
+    end
+
+
+  fun max(summaries: Array[Summary] val): U64 =>
+    Iter[Summary](summaries.values())
+      .map[U64]({(sum) => sum.turns})
       .fold[U64](0, {(largest, next) => if largest >= next then largest else next end})
 
-  fun min(turns: Array[U64] val): U64 =>
-    Iter[U64](turns.values())
+  fun min(summaries: Array[Summary] val): U64 =>
+    Iter[Summary](summaries.values())
+      .map[U64]({(sum) => sum.turns})
       .fold[U64](U64.max_value(), {(smallest, next) => if smallest <= next then smallest else next end})
